@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P2P Share</title>
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --card: #ffffff;
+    --text: #1d1c1a;
+    --muted: #6f6c66;
+    --line: #e4e1da;
+    --accent: #2f6df6;
+    --accent-soft: #e6eeff;
+    --ok: #1f9d55;
+    --warn: #c98a00;
+    --err: #d23c3c;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413;
+      --card: #1e1d1b;
+      --text: #ecebe7;
+      --muted: #9a978f;
+      --line: #2f2e2b;
+      --accent: #6b97ff;
+      --accent-soft: #1f2a44;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  h1 span { color: var(--accent); }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--muted);
+    padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+  .dot.err { background: var(--err); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px; margin-bottom: 16px;
+  }
+  .label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+  .row { display: flex; gap: 8px; }
+  input[type=text] {
+    flex: 1; min-width: 0; font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--bg); color: var(--text);
+  }
+  select {
+    font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  }
+  button, .btn {
+    font: inherit; font-weight: 600; cursor: pointer; border: 0; border-radius: 10px;
+    padding: 10px 16px; background: var(--accent); color: #fff; text-decoration: none;
+    display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
+  }
+  button.ghost, .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  button.small, .btn.small { padding: 6px 12px; font-size: 13px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .hint { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+  .drop {
+    display: block;
+    border: 2px dashed var(--line); border-radius: var(--radius); padding: 36px 16px;
+    text-align: center; color: var(--muted); cursor: pointer; transition: .15s;
+    background: var(--card); margin-bottom: 16px;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+  .drop strong { display: block; color: var(--text); font-size: 16px; margin-bottom: 4px; }
+  .files { list-style: none; margin: 0; padding: 0; }
+  .files li {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center;
+    padding: 12px 0; border-top: 1px solid var(--line);
+  }
+  .files li:first-child { border-top: 0; padding-top: 0; }
+  .fname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fmeta { font-size: 13px; color: var(--muted); grid-column: 1; }
+  .factions { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 6px; }
+  .bar { grid-column: 1 / -1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  .bar.done > i { background: var(--ok); }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 8px 0; margin: 0; }
+  .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
+  .head h2 { font-size: 16px; margin: 0; }
+  .note { font-size: 13px; color: var(--muted); text-align: center; }
+  .note a { color: var(--accent); }
+  .field { margin-bottom: 16px; }
+  .field input { width: 100%; font-family: inherit; font-size: 15px; }
+  .peers li { grid-template-columns: auto 1fr; }
+  .peers .avatar, .from .avatar {
+    width: 36px; height: 36px; border-radius: 50%; grid-row: 1 / span 3;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 15px;
+  }
+  .peers .fname, .peers .fmeta, .peers .pstatus { grid-column: 2; }
+  .peers .fname span { font-weight: 400; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; margin-left: 6px; }
+  .pstatus { font-size: 13px; color: var(--accent); }
+  .pstatus.idle { color: var(--muted); }
+  .from { display: flex; gap: 14px; align-items: center; }
+  .from .avatar { width: 48px; height: 48px; font-size: 20px; flex: none; }
+  .from .who { font-size: 18px; font-weight: 700; }
+  .from .fmeta { margin-top: 2px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>P2P <span>Share</span></h1>
+    <div class="pill"><i class="dot" id="dot"></i><span id="status">Uruchamianie…</span></div>
+  </header>
+
+  <!-- NADAWCA -->
+  <section id="send" hidden>
+    <div class="card">
+      <div class="field">
+        <p class="label">Twoja nazwa (zobaczą ją odbiorcy)</p>
+        <input type="text" id="myName" maxlength="40" placeholder="np. Adrian" autocomplete="off">
+      </div>
+      <p class="label">Twój link do udostępnienia</p>
+      <div class="row">
+        <input type="text" id="link" readonly value="…">
+        <button id="copy">Kopiuj</button>
+      </div>
+      <p class="hint" id="ipPick" hidden>Adres w sieci: <select id="ipSelect"></select></p>
+      <p class="hint" id="linkHint">Otwórz go na drugim komputerze w tej samej sieci Wi-Fi.</p>
+    </div>
+
+    <div class="card">
+      <div class="head"><h2>Połączeni odbiorcy</h2><span class="label" id="peerCount" style="margin:0">0</span></div>
+      <ul class="files peers" id="peerList"></ul>
+      <p class="empty" id="peerEmpty">Nikt jeszcze nie jest połączony.</p>
+    </div>
+
+    <label class="drop" id="drop">
+      <strong>Upuść pliki tutaj</strong>
+      albo kliknij, żeby wybrać z dysku
+      <input type="file" id="picker" multiple hidden>
+    </label>
+
+    <div class="card">
+      <div class="head"><h2>Udostępniane pliki</h2><span class="label" id="total" style="margin:0"></span></div>
+      <ul class="files" id="sendList"></ul>
+      <p class="empty" id="sendEmpty">Brak plików. Dodaj coś powyżej.</p>
+    </div>
+    <p class="note">Pliki lecą prosto z tej karty, nie przez serwer. Nie zamykaj jej, dopóki odbiorca nie pobierze plików.</p>
+  </section>
+
+  <!-- ODBIORCA -->
+  <section id="recv" hidden>
+    <div class="card field">
+      <p class="label">Twoja nazwa (zobaczy ją nadawca)</p>
+      <input type="text" id="recvName" maxlength="40" placeholder="np. Kasia" autocomplete="off">
+    </div>
+    <div class="card from" id="fromCard" hidden>
+      <div class="avatar" id="fromAvatar">?</div>
+      <div>
+        <div class="label" style="margin:0">Pliki udostępnia</div>
+        <div class="who" id="fromName">…</div>
+        <div class="fmeta" id="fromMeta"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="head">
+        <h2>Pliki do pobrania</h2>
+        <button class="small" id="getAll" disabled>Pobierz wszystkie</button>
+      </div>
+      <ul class="files" id="recvList"></ul>
+      <p class="empty" id="recvEmpty">Czekam na listę plików od nadawcy…</p>
+    </div>
+    <p class="note">Pobierane pliki są składane w pamięci przeglądarki, więc przy bardzo dużych plikach (kilka GB) potrzeba sporo RAM-u.<br>
+      <a href="./">Udostępnij własne pliki</a></p>
+  </section>
+</main>
+
+<script src="lib/peerjs.min.js"></script>
+<script>
+  // Zapasowo z CDN, gdyby lokalna kopia nie była dostępna
+  if (!window.Peer) document.write('<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');
+</script>
+<script>
+(() => {
+  'use strict';
+
+  const CHUNK_MAX = 64 * 1024;      // maks. rozmiar jednej wiadomości
+  const READ_BLOCK = 1024 * 1024;   // ile czytamy z dysku naraz
+  const HIGH_WATER = 4 * 1024 * 1024; // pauza, gdy w buforze kanału jest > 4 MB
+  const LOW_WATER = 1024 * 1024;
+
+  const $ = (s) => document.querySelector(s);
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+
+  function fmtSize(b) {
+    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+    return (i === 0 ? b : b.toFixed(b < 10 ? 1 : 0)) + ' ' + u[i];
+  }
+
+  function randId(len = 10) {
+    const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+    const r = new Uint32Array(len);
+    crypto.getRandomValues(r);
+    let s = '';
+    for (let i = 0; i < len; i++) s += abc[r[i] % abc.length];
+    return s;
+  }
+
+  function setStatus(kind, text) {
+    $('#dot').className = 'dot ' + kind;
+    $('#status').textContent = text;
+  }
+
+  const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+
+  // Tryb pracy: z naszym serwerem (npm start) albo bez (np. GitHub Pages)
+  let SERVER = null; // { ips, port } gdy działa server.js
+  const serverPromise = fetch('api/info', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => (j && Array.isArray(j.ips) ? j : null))
+    .catch(() => null);
+
+  function peerOptions() {
+    // Bez własnego serwera: darmowy publiczny serwer sygnalizacyjny PeerJS (0.peerjs.com)
+    if (!SERVER) return { debug: 1, config: ICE };
+    const secure = location.protocol === 'https:';
+    return {
+      host: location.hostname,
+      port: Number(location.port) || (secure ? 443 : 80),
+      path: '/peerjs',
+      secure,
+      debug: 1,
+      config: ICE,
+    };
+  }
+
+  /* ---------- informacje o urządzeniu (z tego, co przeglądarka łatwo zdradza) ---------- */
+
+  function parseUA() {
+    const ua = navigator.userAgent;
+    let os = 'Nieznany system', m;
+    if (/iPhone/.test(ua)) os = 'iOS (iPhone)';
+    else if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) os = 'iPadOS';
+    else if ((m = ua.match(/Android ([\d.]+)/))) os = 'Android ' + m[1];
+    else if (/Windows NT 10/.test(ua)) os = 'Windows 10/11';
+    else if ((m = ua.match(/Windows NT ([\d.]+)/))) os = 'Windows NT ' + m[1];
+    else if (/Macintosh|Mac OS X/.test(ua)) os = 'macOS';
+    else if (/CrOS/.test(ua)) os = 'ChromeOS';
+    else if (/Linux/.test(ua)) os = 'Linux';
+
+    let browser = 'Nieznana przeglądarka';
+    if ((m = ua.match(/Edg(?:A|iOS)?\/(\d+)/))) browser = 'Edge ' + m[1];
+    else if ((m = ua.match(/OPR\/(\d+)/))) browser = 'Opera ' + m[1];
+    else if ((m = ua.match(/(?:Firefox|FxiOS)\/(\d+)/))) browser = 'Firefox ' + m[1];
+    else if ((m = ua.match(/(?:Chrome|CriOS)\/(\d+)/))) browser = 'Chrome ' + m[1];
+    else if ((m = ua.match(/Version\/([\d.]+).*Safari/))) browser = 'Safari ' + m[1];
+    else if (/FBAN|FBAV/.test(ua)) browser = 'Facebook (w aplikacji)';
+    else if (/Instagram/.test(ua)) browser = 'Instagram (w aplikacji)';
+    else if (/GSA\//.test(ua)) browser = 'Aplikacja Google';
+    else if (/AppleWebKit/.test(ua) && /iPhone|iPad/.test(ua)) browser = 'Safari (w aplikacji)';
+
+    const mobile = /Mobi|iPhone|Android/.test(ua);
+    return { os, browser, device: mobile ? 'telefon' : (os === 'iPadOS' ? 'tablet' : 'komputer') };
+  }
+
+  async function myInfo() {
+    const ua = parseUA();
+    let ip = null;
+    const server = await serverPromise;
+    try {
+      // lokalnie: IP w sieci domowej; w internecie: publiczne IP (wspólne dla całej sieci)
+      const url = server ? 'api/whoami' : 'https://api.ipify.org?format=json';
+      ip = (await (await fetch(url)).json()).ip || null;
+    } catch (e) {}
+    return { ...ua, ip };
+  }
+
+  function describe(info, withIp) {
+    if (!info) return '';
+    const parts = [];
+    if (withIp && info.ip) parts.push(info.ip);
+    parts.push(info.os, info.browser);
+    return parts.join(' · ');
+  }
+
+  function initials(name) {
+    const s = (name || '').trim();
+    if (!s) return '?';
+    const w = s.split(/\s+/);
+    return ((w[0][0] || '') + (w[1] ? w[1][0] : '')).toUpperCase();
+  }
+
+  function plPliki(n) {
+    if (n === 1) return 'plik';
+    const d = n % 10, dd = n % 100;
+    return d >= 2 && d <= 4 && !(dd >= 12 && dd <= 14) ? 'pliki' : 'plików';
+  }
+
+  const timeStr = (d) => d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+
+  const infoPromise = myInfo();
+
+  if (!window.Peer) {
+    setStatus('err', 'Nie udało się wczytać PeerJS');
+    return;
+  }
+
+  serverPromise.then((server) => {
+    SERVER = server;
+    const senderId = new URLSearchParams(location.search).get('s');
+    if (senderId) startReceiver(senderId);
+    else startSender();
+  });
+
+  /* =========================== NADAWCA =========================== */
+
+  function startSender() {
+    $('#send').hidden = false;
+
+    const files = new Map(); // id -> { file, downloads, meta }
+    const conns = new Set();
+    let seq = 0;
+    let peerSeq = 0;
+    let lanIp = null;        // IP tego komputera w sieci (do pokazania odbiorcom)
+
+    // nazwa nadawcy
+    const nameInput = $('#myName');
+    try { nameInput.value = localStorage.getItem('p2p-share-name') || ''; } catch (e) {}
+    let nameTimer = null;
+    nameInput.addEventListener('input', () => {
+      clearTimeout(nameTimer);
+      nameTimer = setTimeout(() => {
+        try { localStorage.setItem('p2p-share-name', nameInput.value.trim()); } catch (e) {}
+        broadcast(helloMsg);
+      }, 300);
+    });
+
+    async function helloMsg() {
+      const info = { ...(await infoPromise) };
+      if (SERVER) {
+        if (lanIp) info.ip = lanIp;
+        else if (!['localhost', '127.0.0.1'].includes(location.hostname)) info.ip = location.hostname;
+      }
+      return JSON.stringify({ type: 'hello', name: nameInput.value.trim(), info });
+    }
+
+    async function broadcast(makeMsg) {
+      const msg = await makeMsg();
+      for (const c of conns) if (c.open) c.send(msg);
+    }
+
+    // nowy, losowy link przy każdym otwarciu / odświeżeniu strony
+    openPeer(randId());
+
+    function openPeer(id) {
+      setStatus('warn', 'Łączenie z serwerem…');
+      const peer = new Peer(id, peerOptions());
+
+      peer.on('open', (pid) => {
+        setStatus('ok', 'Gotowe do wysyłania');
+        showLink(pid);
+      });
+      peer.on('connection', setupConn);
+      peer.on('disconnected', () => {
+        setStatus('warn', 'Ponowne łączenie…');
+        setTimeout(() => { if (!peer.destroyed) peer.reconnect(); }, 1000);
+      });
+      peer.on('error', (err) => {
+        console.warn('peer error', err.type, err);
+        if (err.type === 'unavailable-id') {
+          peer.destroy();
+          openPeer(randId());
+        } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
+          setStatus('err', 'Brak połączenia z serwerem');
+        }
+      });
+    }
+
+    async function showLink(id) {
+      const isLocal = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(location.hostname);
+      const build = (host) => `${location.protocol}//${host}${location.pathname}?s=${id}`;
+      $('#link').value = build(location.host);
+      if (!SERVER) {                             // GitHub Pages itp.: zwykły link
+        $('#linkHint').textContent = 'Wyślij go komuś. Działa w tej samej sieci i przez internet.';
+        return;
+      }
+      if (!isLocal) { lanIp = location.hostname; return; }
+
+      // Otwarte przez localhost, więc podmień na adres w sieci domowej
+      try {
+        const info = SERVER;
+        const rank = (ip) => ip.startsWith('192.168.') ? 0 : ip.startsWith('10.') ? 1 : ip.startsWith('172.') ? 2 : 3;
+        const ips = info.ips.slice().sort((a, b) => rank(a) - rank(b));
+        if (!ips.length) return;
+        const sel = $('#ipSelect');
+        sel.innerHTML = '';
+        ips.forEach((ip) => sel.append(new Option(ip, ip)));
+        sel.onchange = () => { lanIp = sel.value; $('#link').value = build(`${sel.value}:${info.port}`); broadcast(helloMsg); };
+        $('#ipPick').hidden = ips.length < 2;
+        lanIp = ips[0];
+        $('#link').value = build(`${ips[0]}:${info.port}`);
+      } catch (e) { console.warn(e); }
+    }
+
+    $('#copy').onclick = async () => {
+      const input = $('#link');
+      let ok = false;
+      try { await navigator.clipboard.writeText(input.value); ok = true; } catch (e) {}
+      if (!ok) { input.select(); try { ok = document.execCommand('copy'); } catch (e) {} }
+      $('#copy').textContent = ok ? 'Skopiowano' : 'Zaznaczono';
+      setTimeout(() => { $('#copy').textContent = 'Kopiuj'; }, 1500);
+    };
+
+    // dodawanie plików
+    const picker = $('#picker');
+    const drop = $('#drop');
+    picker.onchange = () => { addFiles(picker.files); picker.value = ''; };
+    ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+    drop.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => e.preventDefault());
+
+    function addFiles(list) {
+      for (const file of list) {
+        if (!file.size && !file.type && file.name.indexOf('.') === -1) continue; // prawdopodobnie folder
+        const id = 'f' + (++seq);
+        files.set(id, { file, downloads: 0, sending: null });
+      }
+      renderSend();
+      broadcastList();
+    }
+
+    function renderSend() {
+      const ul = $('#sendList');
+      ul.innerHTML = '';
+      let total = 0;
+      for (const [id, entry] of files) {
+        total += entry.file.size;
+        const li = el('li');
+        li.append(el('div', 'fname', entry.file.name));
+        const meta = el('div', 'fmeta');
+        entry.metaEl = meta;
+        li.append(meta);
+        const actions = el('div', 'factions');
+        const rm = el('button', 'ghost small', 'Usuń');
+        rm.onclick = () => { files.delete(id); renderSend(); broadcastList(); };
+        actions.append(rm);
+        li.append(actions);
+        ul.append(li);
+        updateMeta(entry);
+      }
+      $('#sendEmpty').hidden = files.size > 0;
+      $('#total').textContent = files.size ? `${files.size} ${plPliki(files.size)} · ${fmtSize(total)}` : '';
+    }
+
+    function updateMeta(entry) {
+      if (!entry.metaEl) return;
+      let t = fmtSize(entry.file.size);
+      if (entry.sending != null) t += ` · wysyłanie ${entry.sending}%`;
+      else if (entry.downloads) t += ` · pobrano ${entry.downloads}×`;
+      entry.metaEl.textContent = t;
+    }
+
+    function listMsg() {
+      return JSON.stringify({
+        type: 'list',
+        files: [...files].map(([id, e]) => ({ id, name: e.file.name, size: e.file.size })),
+      });
+    }
+    function broadcastList() {
+      broadcast(listMsg);
+    }
+
+    function renderPeers() {
+      const ul = $('#peerList');
+      ul.innerHTML = '';
+      for (const c of conns) {
+        const info = c._info;
+        const li = el('li');
+        const name = (c._name || '').trim();
+        li.append(el('div', 'avatar', name ? initials(name) : String(c._num)));
+        const title = el('div', 'fname', name || 'Odbiorca #' + c._num);
+        title.append(el('span', null, (info && info.ip) || '…'));
+        li.append(title);
+        li.append(el('div', 'fmeta', info ? describe(info, false) : 'Wczytywanie danych urządzenia…'));
+        c._statusEl = el('div', 'pstatus');
+        li.append(c._statusEl);
+        ul.append(li);
+        updatePeerStatus(c);
+      }
+      $('#peerEmpty').hidden = conns.size > 0;
+      $('#peerCount').textContent = String(conns.size);
+    }
+
+    function updatePeerStatus(c) {
+      if (!c._statusEl) return;
+      let t, idle = false;
+      if (c._sending) t = `pobiera „${c._sending.name}” · ${c._sending.pct}%` + (c._queue.length ? ` · w kolejce ${c._queue.length}` : '');
+      else {
+        idle = true;
+        t = `połączony od ${timeStr(c._since)}`;
+        if (c._done) t += ` · pobrał ${c._done} ${plPliki(c._done)} (${fmtSize(c._bytes)})`;
+      }
+      c._statusEl.textContent = t;
+      c._statusEl.classList.toggle('idle', idle);
+    }
+
+    function setupConn(conn) {
+      conn._queue = [];
+      conn._num = ++peerSeq;
+      conn._since = new Date();
+      conn._done = 0;
+      conn._bytes = 0;
+      conn.on('open', async () => {
+        conns.add(conn);
+        renderPeers();
+        conn.send(await helloMsg());
+        conn.send(listMsg());
+      });
+      conn.on('data', (data) => {
+        if (typeof data !== 'string') return;
+        let msg;
+        try { msg = JSON.parse(data); } catch (e) { return; }
+        if (msg.type === 'hello') {
+          conn._info = msg.info || {};
+          conn._name = msg.name || '';
+          renderPeers();
+        } else if (msg.type === 'get') {
+          conn._queue.push(msg.id);
+          if (!conn._busy) pump(conn);
+          updatePeerStatus(conn);
+        }
+      });
+      const gone = () => { if (conns.delete(conn)) renderPeers(); };
+      conn.on('close', gone);
+      conn.on('error', (e) => { console.warn('conn error', e); gone(); });
+    }
+
+    async function pump(conn) {
+      conn._busy = true;
+      while (conn._queue.length && conn.open) {
+        const id = conn._queue.shift();
+        const entry = files.get(id);
+        if (!entry) { conn.send(JSON.stringify({ type: 'missing', id })); continue; }
+        try {
+          await sendFile(conn, id, entry);
+        } catch (e) {
+          console.warn('wysyłanie przerwane', e);
+          entry.sending = null; updateMeta(entry);
+          conn._sending = null;
+          break;
+        }
+      }
+      conn._busy = false;
+      updatePeerStatus(conn);
+    }
+
+    function chunkSize(conn) {
+      const max = conn.peerConnection && conn.peerConnection.sctp && conn.peerConnection.sctp.maxMessageSize;
+      return max && isFinite(max) && max > 0 ? Math.min(CHUNK_MAX, max) : 16 * 1024;
+    }
+
+    // Czekanie na opróżnienie bufora. Event zamiast setTimeout, żeby nie zwalniać w karcie w tle.
+    function waitDrain(dc) {
+      return new Promise((resolve) => {
+        if (dc.bufferedAmount <= LOW_WATER || dc.readyState !== 'open') return resolve();
+        const done = () => {
+          dc.removeEventListener('bufferedamountlow', done);
+          dc.removeEventListener('close', done);
+          resolve();
+        };
+        dc.addEventListener('bufferedamountlow', done);
+        dc.addEventListener('close', done);
+      });
+    }
+
+    async function sendFile(conn, id, entry) {
+      const { file } = entry;
+      const dc = conn.dataChannel;
+      dc.bufferedAmountLowThreshold = LOW_WATER;
+      const cs = chunkSize(conn);
+
+      conn.send(JSON.stringify({ type: 'start', id, name: file.name, size: file.size, mime: file.type }));
+      entry.sending = 0; updateMeta(entry);
+      conn._sending = { name: file.name, pct: 0 };
+      updatePeerStatus(conn);
+
+      let offset = 0, lastUi = 0;
+      while (offset < file.size) {
+        const block = await file.slice(offset, offset + READ_BLOCK).arrayBuffer();
+        for (let p = 0; p < block.byteLength; p += cs) {
+          if (dc.bufferedAmount > HIGH_WATER) await waitDrain(dc);
+          if (!conn.open || dc.readyState !== 'open') throw new Error('połączenie zamknięte');
+          conn.send(block.slice(p, p + cs));
+        }
+        offset += block.byteLength;
+        const now = performance.now();
+        if (now - lastUi > 200) {
+          lastUi = now;
+          entry.sending = Math.floor((offset / file.size) * 100);
+          conn._sending.pct = entry.sending;
+          updateMeta(entry);
+          updatePeerStatus(conn);
+        }
+      }
+      conn.send(JSON.stringify({ type: 'end', id }));
+      entry.sending = null;
+      entry.downloads++;
+      conn._sending = null;
+      conn._done++;
+      conn._bytes += file.size;
+      updateMeta(entry);
+      updatePeerStatus(conn);
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+      if (files.size && conns.size) { e.preventDefault(); e.returnValue = ''; }
+    });
+  }
+
+  /* =========================== ODBIORCA =========================== */
+
+  function startReceiver(senderId) {
+    $('#recv').hidden = false;
+    setStatus('warn', 'Łączenie z nadawcą…');
+
+    const items = new Map(); // id -> { meta, state, li, metaEl, bar, actions, url }
+    let conn = null;
+    let current = null;      // aktualnie odbierany plik
+
+    // nazwa odbiorcy
+    const nameInput = $('#recvName');
+    try { nameInput.value = localStorage.getItem('p2p-share-name') || ''; } catch (e) {}
+    let nameTimer = null;
+    nameInput.addEventListener('input', () => {
+      clearTimeout(nameTimer);
+      nameTimer = setTimeout(() => {
+        try { localStorage.setItem('p2p-share-name', nameInput.value.trim()); } catch (e) {}
+        sendHello();
+      }, 300);
+    });
+
+    async function sendHello() {
+      const info = await infoPromise;
+      if (conn && conn.open) conn.send(JSON.stringify({ type: 'hello', name: nameInput.value.trim(), info }));
+    }
+
+    const peer = new Peer(peerOptions());
+    peer.on('open', () => {
+      conn = peer.connect(senderId, { reliable: true, serialization: 'raw' });
+      conn.on('open', async () => {
+        setStatus('ok', 'Połączono z nadawcą');
+        sendHello();
+      });
+      conn.on('data', onData);
+      conn.on('close', () => {
+        setStatus('err', 'Nadawca się rozłączył');
+        if (current) failCurrent('Przerwano – nadawca się rozłączył');
+      });
+      conn.on('error', (e) => console.warn('conn error', e));
+    });
+    peer.on('error', (err) => {
+      console.warn('peer error', err.type, err);
+      if (err.type === 'peer-unavailable') setStatus('err', 'Nadawca jest offline (zamknął kartę?)');
+      else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) setStatus('err', 'Brak połączenia z serwerem');
+      else setStatus('err', 'Błąd: ' + err.type);
+    });
+
+    function onData(data) {
+      if (typeof data === 'string') {
+        let msg;
+        try { msg = JSON.parse(data); } catch (e) { return; }
+        handle(msg);
+        return;
+      }
+      if (!current) return;
+      current.chunks.push(data);
+      current.received += data.byteLength != null ? data.byteLength : data.size;
+      const now = performance.now();
+      if (now - current.lastUi > 150) {
+        current.lastUi = now;
+        showProgress(current);
+      }
+    }
+
+    function handle(msg) {
+      switch (msg.type) {
+        case 'hello': showSender(msg); break;
+        case 'list': syncList(msg.files); break;
+        case 'start': {
+          const it = items.get(msg.id);
+          current = {
+            id: msg.id, name: msg.name, size: msg.size, mime: msg.mime,
+            chunks: [], received: 0, t0: performance.now(), lastUi: 0,
+          };
+          if (it) { it.state = 'downloading'; renderItem(it); }
+          showProgress(current);
+          break;
+        }
+        case 'end': finishCurrent(); break;
+        case 'missing': {
+          const it = items.get(msg.id);
+          if (it) { it.state = 'missing'; renderItem(it); }
+          break;
+        }
+      }
+    }
+
+    function showSender(msg) {
+      const name = (msg.name || '').trim();
+      $('#fromCard').hidden = false;
+      $('#fromAvatar').textContent = initials(name);
+      $('#fromName').textContent = name || 'Nieznany nadawca';
+      $('#fromMeta').textContent = describe(msg.info, true);
+      document.title = name ? `Pliki od ${name} · P2P Share` : 'P2P Share';
+      setStatus('ok', name ? `Połączono z: ${name}` : 'Połączono z nadawcą');
+    }
+
+    function syncList(list) {
+      const ids = new Set(list.map((f) => f.id));
+      // usuń pliki, których nadawca już nie udostępnia (chyba że są pobrane lub w trakcie)
+      for (const [id, it] of items) {
+        if (!ids.has(id) && !['done', 'downloading', 'queued'].includes(it.state)) {
+          it.li.remove(); items.delete(id);
+        }
+      }
+      for (const f of list) {
+        if (items.has(f.id)) continue;
+        const it = { meta: f, state: 'idle' };
+        it.li = el('li');
+        it.li.append(el('div', 'fname', f.name));
+        it.metaEl = el('div', 'fmeta');
+        it.actions = el('div', 'factions');
+        it.bar = el('div', 'bar'); it.bar.append(el('i'));
+        it.bar.hidden = true;
+        it.li.append(it.metaEl, it.actions, it.bar);
+        $('#recvList').append(it.li);
+        items.set(f.id, it);
+        renderItem(it);
+      }
+      $('#recvEmpty').hidden = items.size > 0;
+      $('#recvEmpty').textContent = 'Nadawca nie udostępnia jeszcze żadnych plików.';
+      updateGetAll();
+    }
+
+    function request(it) {
+      if (!conn || !conn.open) return;
+      it.state = 'queued';
+      renderItem(it);
+      conn.send(JSON.stringify({ type: 'get', id: it.meta.id }));
+      updateGetAll();
+    }
+
+    function updateGetAll() {
+      const any = [...items.values()].some((it) => it.state === 'idle' || it.state === 'failed');
+      $('#getAll').disabled = !any;
+    }
+    $('#getAll').onclick = () => {
+      for (const it of items.values()) if (it.state === 'idle' || it.state === 'failed') request(it);
+    };
+
+    function renderItem(it) {
+      const size = fmtSize(it.meta.size);
+      it.actions.innerHTML = '';
+      it.bar.hidden = !['downloading', 'done'].includes(it.state);
+      it.bar.classList.toggle('done', it.state === 'done');
+      switch (it.state) {
+        case 'idle':
+        case 'failed': {
+          it.metaEl.textContent = it.state === 'failed' ? `${size} · ${it.error || 'błąd'}` : size;
+          const b = el('button', 'small', it.state === 'failed' ? 'Ponów' : 'Pobierz');
+          b.onclick = () => request(it);
+          it.actions.append(b);
+          break;
+        }
+        case 'queued': it.metaEl.textContent = `${size} · w kolejce`; break;
+        case 'downloading': it.metaEl.textContent = `${size} · pobieranie…`; break;
+        case 'missing': it.metaEl.textContent = `${size} · nadawca usunął ten plik`; break;
+        case 'done': {
+          it.metaEl.textContent = `${size} · gotowe`;
+          it.bar.firstChild.style.width = '100%';
+          const a = el('a', 'btn ghost small', 'Zapisz');
+          a.href = it.url; a.download = it.meta.name;
+          it.actions.append(a);
+          break;
+        }
+      }
+    }
+
+    function showProgress(cur) {
+      const it = items.get(cur.id);
+      if (!it) return;
+      const pct = cur.size ? (cur.received / cur.size) * 100 : 100;
+      const secs = (performance.now() - cur.t0) / 1000;
+      const speed = secs > 0.2 ? cur.received / secs : 0;
+      it.bar.firstChild.style.width = pct.toFixed(1) + '%';
+      it.metaEl.textContent = `${fmtSize(cur.received)} / ${fmtSize(cur.size)} · ${pct.toFixed(0)}%` +
+        (speed ? ` · ${fmtSize(speed)}/s` : '');
+    }
+
+    function finishCurrent() {
+      if (!current) return;
+      const cur = current;
+      current = null;
+      const it = items.get(cur.id);
+      if (cur.received !== cur.size) {
+        if (it) { it.state = 'failed'; it.error = 'niekompletny plik'; renderItem(it); updateGetAll(); }
+        return;
+      }
+      const blob = new Blob(cur.chunks, { type: cur.mime || 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const secs = (performance.now() - cur.t0) / 1000;
+      console.log(`Odebrano ${cur.name}: ${fmtSize(cur.size)} w ${secs.toFixed(1)} s`);
+      if (it) {
+        it.state = 'done'; it.url = url; renderItem(it);
+        it.actions.querySelector('a').click(); // od razu zapisz
+      }
+      updateGetAll();
+    }
+
+    function failCurrent(reason) {
+      const it = items.get(current.id);
+      current = null;
+      if (it) { it.state = 'failed'; it.error = reason; renderItem(it); }
+      for (const x of items.values()) if (x.state === 'queued') { x.state = 'failed'; x.error = reason; renderItem(x); }
+      updateGetAll();
+    }
+  }
+})();
+</script>
+</body>
+</html>
