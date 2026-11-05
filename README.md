@@ -43,7 +43,8 @@ tymczasowe dane do TURN-a, a klucze leżą w zmiennych środowiskowych Vercela
 
 - **Cloudflare** (1000 GB/mies. za darmo): `CF_TURN_KEY_ID`, `CF_TURN_API_TOKEN`
   (Cloudflare dashboard → Realtime → TURN Server → Create)
-- albo **Metered** (20 GB/mies. za darmo): `METERED_APP`, `METERED_API_KEY`
+- albo **Metered**: `METERED_APP` + `METERED_API_KEY`, albo stały login z zakładki Credentials:
+  `TURN_USERNAME` + `TURN_CREDENTIAL` (serwer `global.relay.metered.ca`; darmowy trial 500 MB bez karty)
 
 Po dodaniu zmiennych zrób Redeploy. Status połączenia pokazuje „bezpośrednio” albo „przez przekaźnik”.
 

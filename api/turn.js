@@ -3,6 +3,7 @@
 //
 // Cloudflare (1000 GB/mies. za darmo):  CF_TURN_KEY_ID, CF_TURN_API_TOKEN
 // Metered / Open Relay (20 GB/mies.):   METERED_APP (np. "mojaapka"), METERED_API_KEY
+// Stały login/hasło TURN (np. Metered):  TURN_USERNAME, TURN_CREDENTIAL, opcjonalnie TURN_HOST
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -32,6 +33,23 @@ module.exports = async (req, res) => {
       if (!r.ok) throw new Error(`Metered odpowiedział ${r.status}`);
       const iceServers = await r.json();
       return res.status(200).json({ provider: 'metered', iceServers });
+    }
+
+    // Stały login/hasło (np. Metered: Credentials → Username / Password)
+    const { TURN_USERNAME, TURN_CREDENTIAL } = process.env;
+    if (TURN_USERNAME && TURN_CREDENTIAL) {
+      const host = process.env.TURN_HOST || 'global.relay.metered.ca';
+      const auth = { username: TURN_USERNAME, credential: TURN_CREDENTIAL };
+      return res.status(200).json({
+        provider: 'static',
+        iceServers: [
+          { urls: `stun:${host}:80` },
+          { urls: `turn:${host}:80`, ...auth },
+          { urls: `turn:${host}:80?transport=tcp`, ...auth },
+          { urls: `turn:${host}:443`, ...auth },
+          { urls: `turns:${host}:443?transport=tcp`, ...auth },
+        ],
+      });
     }
 
     return res.status(200).json({ provider: null, iceServers: [] });
