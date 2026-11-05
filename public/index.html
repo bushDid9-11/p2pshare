@@ -324,8 +324,55 @@
     return;
   }
 
-  serverPromise.then((server) => {
+  // Serwer TURN (przekaźnik) z funkcji /api/turn na Vercelu. Bez niego część sieci
+  // komórkowych (CGNAT) nie zestawi połączenia.
+  let TURN_ON = false;
+  async function loadTurn() {
+    if (SERVER) return; // lokalnie w domowym Wi-Fi TURN nie jest potrzebny
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 5000);
+      const r = await fetch('api/turn', { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(t);
+      if (!r.ok) return;
+      const j = await r.json();
+      const servers = (j.iceServers || []).map((s) => {
+        const urls = [].concat(s.urls || s.url || []).filter((u) => !/:53(\?|$)/.test(u)); // port 53 blokowany przez przeglądarki
+        return { ...s, urls };
+      }).filter((s) => s.urls.length);
+      if (servers.some((s) => s.urls.some((u) => u.startsWith('turn')))) {
+        ICE.iceServers = ICE.iceServers.concat(servers);
+        TURN_ON = true;
+      }
+    } catch (e) { console.warn('TURN niedostępny', e); }
+  }
+
+  // Jak faktycznie idą dane: bezpośrednio czy przez przekaźnik
+  async function routeOf(conn) {
+    try {
+      const pc = conn.peerConnection;
+      if (!pc) return null;
+      const stats = await pc.getStats();
+      let pairId = null;
+      stats.forEach((s) => { if (s.type === 'transport' && s.selectedCandidatePairId) pairId = s.selectedCandidatePairId; });
+      let pair = pairId ? stats.get(pairId) : null;
+      if (!pair) stats.forEach((s) => { if (s.type === 'candidate-pair' && s.state === 'succeeded' && (s.nominated || s.selected)) pair = s; });
+      if (!pair) return null;
+      const l = stats.get(pair.localCandidateId), r = stats.get(pair.remoteCandidateId);
+      return (l && l.candidateType === 'relay') || (r && r.candidateType === 'relay') ? 'przez przekaźnik' : 'bezpośrednio';
+    } catch (e) { return null; }
+  }
+  async function routeLater(conn, cb) {
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const route = await routeOf(conn);
+      if (route) return cb(route);
+    }
+  }
+
+  serverPromise.then(async (server) => {
     SERVER = server;
+    await loadTurn();
     const senderId = new URLSearchParams(location.search).get('s');
     if (senderId) startReceiver(senderId);
     else startSender();
@@ -518,7 +565,7 @@
       if (c._sending) t = `pobiera „${c._sending.name}” · ${c._sending.pct}%` + (c._queue.length ? ` · w kolejce ${c._queue.length}` : '');
       else {
         idle = true;
-        t = `połączony od ${timeStr(c._since)}`;
+        t = `połączony od ${timeStr(c._since)}` + (c._route ? ` · ${c._route}` : '');
         if (c._done) t += ` · pobrał ${c._done} ${plPliki(c._done)} (${fmtSize(c._bytes)})`;
       }
       c._statusEl.textContent = t;
@@ -534,6 +581,7 @@
       conn.on('open', async () => {
         conns.add(conn);
         renderPeers();
+        routeLater(conn, (r) => { conn._route = r; updatePeerStatus(conn); });
         conn.send(await helloMsg());
         conn.send(listMsg());
       });
@@ -665,12 +713,26 @@
       if (conn && conn.open) conn.send(JSON.stringify({ type: 'hello', name: nameInput.value.trim(), info }));
     }
 
+    let route = '';
+    let senderName = '';
+    const okStatus = () => setStatus('ok', (senderName ? `Połączono z: ${senderName}` : 'Połączono z nadawcą') + (route ? ` · ${route}` : ''));
+
     const peer = new Peer(peerOptions());
     peer.on('open', () => {
       conn = peer.connect(senderId, { reliable: true, serialization: 'raw' });
+      setStatus('warn', 'Zestawianie połączenia z nadawcą…');
+      // Jeśli nic się nie połączy w 25 s, to najpewniej sieć blokuje P2P
+      setTimeout(() => {
+        if (conn && !conn.open) {
+          setStatus('err', TURN_ON
+            ? 'Nie udało się połączyć. Spróbuj innej sieci.'
+            : 'Nie udało się połączyć: ta sieć blokuje połączenia P2P (brak serwera TURN)');
+        }
+      }, 25000);
       conn.on('open', async () => {
-        setStatus('ok', 'Połączono z nadawcą');
+        okStatus();
         sendHello();
+        routeLater(conn, (r) => { route = r; okStatus(); });
       });
       conn.on('data', onData);
       conn.on('close', () => {
@@ -733,7 +795,8 @@
       $('#fromName').textContent = name || 'Nieznany nadawca';
       $('#fromMeta').textContent = describe(msg.info, true);
       document.title = name ? `Pliki od ${name} · P2P Share` : 'P2P Share';
-      setStatus('ok', name ? `Połączono z: ${name}` : 'Połączono z nadawcą');
+      senderName = name;
+      okStatus();
     }
 
     function syncList(list) {

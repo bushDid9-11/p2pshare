@@ -33,7 +33,19 @@ Na Vercelu: Add New → Project → import tego repo → Deploy. Ustawienia są 
 (publikowany jest folder `public/`, bez budowania). Każdy push do `main` aktualizuje stronę.
 
 Online pokazywane jest publiczne IP (z api.ipify.org), więc osoby z tej samej sieci mają to samo IP.
-Bez serwera TURN część sieci (niektóre komórkowe, firmowe) może nie zestawić połączenia.
+
+### Serwer TURN (potrzebny dla sieci komórkowych)
+
+Operatorzy komórkowi chowają telefony za wspólnym adresem (CGNAT), więc bezpośrednie połączenie
+często się nie zestawia i dane muszą iść przez przekaźnik TURN. Funkcja `api/turn.js` pobiera
+tymczasowe dane do TURN-a, a klucze leżą w zmiennych środowiskowych Vercela
+(Project → Settings → Environment Variables):
+
+- **Cloudflare** (1000 GB/mies. za darmo): `CF_TURN_KEY_ID`, `CF_TURN_API_TOKEN`
+  (Cloudflare dashboard → Realtime → TURN Server → Create)
+- albo **Metered** (20 GB/mies. za darmo): `METERED_APP`, `METERED_API_KEY`
+
+Po dodaniu zmiennych zrób Redeploy. Status połączenia pokazuje „bezpośrednio” albo „przez przekaźnik”.
 
 ## Jak to działa
 
